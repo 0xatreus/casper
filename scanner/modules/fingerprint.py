@@ -9,7 +9,7 @@ class FingerprintModule(BaseModule):
     description = "Detects stack components from responses."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan):
+    async def run(self, scan, context):
         yield TechComponentEvent(
             module=self.name,
             scan_id=scan.id,

@@ -2,6 +2,8 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from scanner.core.models import StorageMode
+
 
 class Settings(BaseSettings):
     app_name: str = Field("scanner", description="Service identifier for logging/metrics.")
@@ -14,8 +16,9 @@ class Settings(BaseSettings):
         "file:///tmp/scanner-artifacts",
         description="Base URI for response body/object storage.",
     )
-    storage_mode_default: str = Field(
-        "sampled", description="Default response body storage mode (none/sampled/full)."
+    storage_mode_default: StorageMode = Field(
+        StorageMode.SAMPLED,
+        description="Default response body storage mode (none/sampled/full).",
     )
     record_only_default: bool = Field(
         False, description="If true, active modules default to record-only."

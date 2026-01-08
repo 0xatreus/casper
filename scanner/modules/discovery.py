@@ -10,7 +10,7 @@ class DiscoveryModule(BaseModule):
     description = "Lightweight crawler/API discovery stub."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan) -> EndpointDiscovered:
+    async def run(self, scan, context) -> EndpointDiscovered:
         with session_scope() as session:
             target = session.get(Target, scan.target_id)
         if not target:

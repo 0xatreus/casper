@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 
 
@@ -20,15 +20,31 @@ class EvidenceEvent(Event):
     snippet: str
     location: str
     hash: str
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class FindingEvent(Event):
+    title: str
+    description: Optional[str] = None
     dedupe_key: str
     type: str
     severity: str
     confidence: str = "medium"
     evidence_ids: Optional[list[str]] = None
     source_module: str
+    remediation: Optional[str] = None
+    references: list[str] = Field(default_factory=list)
+    cwe_id: Optional[str] = None
+    cve_id: Optional[str] = None
+
+
+class FetchEvent(Event):
+    fetch_id: str
+    endpoint_id: str
+    request: Dict[str, Any] = Field(default_factory=dict)
+    response_meta: Dict[str, Any] = Field(default_factory=dict)
+    body: Optional[bytes] = None
+    storage_mode: Optional[str] = None
 
 
 class TechComponentEvent(Event):

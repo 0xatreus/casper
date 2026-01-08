@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Protocol
+from urllib.parse import urlparse
 
 from .models import StorageMode
 
@@ -25,19 +29,40 @@ def sample_body(body: bytes) -> bytes:
     return body[:MAX_SAMPLE_BYTES]
 
 
-def store_body(
-    scan_id: str,
-    fetch_id: str,
-    body: Optional[bytes],
-    storage_mode: StorageMode,
-    artifact_base: str,
-) -> Optional[str]:
-    """Persist body according to storage mode. Returns artifact path if stored."""
-    if not body or storage_mode == StorageMode.NONE:
-        return None
-    processed = sample_body(redact_body(body)) if storage_mode == StorageMode.SAMPLED else redact_body(body)
-    base = Path(artifact_base).expanduser()
-    base.mkdir(parents=True, exist_ok=True)
-    out_path = base / f"{scan_id}_{fetch_id}.bin"
-    out_path.write_bytes(processed)
-    return str(out_path)
+class StorageBackend(Protocol):
+    def store_body(
+        self,
+        scan_id: str,
+        fetch_id: str,
+        body: Optional[bytes],
+        storage_mode: StorageMode,
+    ) -> Optional[str]:
+        ...
+
+
+@dataclass(frozen=True)
+class LocalStorageBackend:
+    base_path: Path
+
+    def store_body(
+        self,
+        scan_id: str,
+        fetch_id: str,
+        body: Optional[bytes],
+        storage_mode: StorageMode,
+    ) -> Optional[str]:
+        if not body or storage_mode == StorageMode.NONE:
+            return None
+        processed = sample_body(redact_body(body)) if storage_mode == StorageMode.SAMPLED else redact_body(body)
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        out_path = self.base_path / f"{scan_id}_{fetch_id}.bin"
+        out_path.write_bytes(processed)
+        return str(out_path)
+
+
+def get_storage_backend(uri: str) -> StorageBackend:
+    parsed = urlparse(uri)
+    if parsed.scheme in {"", "file"}:
+        base = Path(parsed.path or uri).expanduser()
+        return LocalStorageBackend(base_path=base)
+    raise NotImplementedError(f"Unsupported object store scheme: {parsed.scheme}")

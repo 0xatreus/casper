@@ -8,6 +8,6 @@ class ManualExportModule(BaseModule):
     description = "Packages scan artifacts for human testers."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan):
+    async def run(self, scan, context):
         # Placeholder: emit an empty record pack.
         yield RecordPack(module=self.name, scan_id=scan.id, requests=[])

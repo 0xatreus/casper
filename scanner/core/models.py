@@ -88,6 +88,8 @@ class Fetch(BaseTable, table=True):
     )
     storage_mode: StorageMode = Field(default=StorageMode.SAMPLED)
     redaction_version: str = Field(default="v1")
+    body_path: Optional[str] = None
+    body_hash: Optional[str] = None
 
 
 class Evidence(BaseTable, table=True):
@@ -96,6 +98,7 @@ class Evidence(BaseTable, table=True):
     snippet: str
     location: str = Field(description="Where in the response/request this evidence was found.")
     hash: str
+    details: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
 
 
 class TechComponent(BaseTable, table=True):
@@ -119,9 +122,15 @@ class CVECandidate(BaseTable, table=True):
 class Finding(BaseTable, table=True):
     dedupe_key: str = Field(index=True)
     type: str
+    title: str
+    description: Optional[str] = None
     severity: str
     confidence: Confidence = Field(default=Confidence.MEDIUM)
     status: FindingStatus = Field(default=FindingStatus.OPEN)
+    remediation: Optional[str] = None
+    references: List[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    cwe_id: Optional[str] = None
+    cve_id: Optional[str] = None
     first_seen: datetime = Field(default_factory=_ts)
     last_seen: datetime = Field(default_factory=_ts)
     fixed_at: Optional[datetime] = None
@@ -135,6 +144,8 @@ class ExceptionRecord(BaseTable, table=True):
     approver: str
     ticket: str
     status: str = Field(default="approved")
+    reason: Optional[str] = None
+    owner: Optional[str] = None
 
 
 class AuditEvent(BaseTable, table=True):

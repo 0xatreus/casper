@@ -10,6 +10,7 @@ engine = create_engine(settings.database_url, echo=False)
 
 
 def init_db() -> None:
+    # Dev convenience; use Alembic for schema migrations in production.
     SQLModel.metadata.create_all(engine)
 
 

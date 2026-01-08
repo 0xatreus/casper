@@ -9,7 +9,7 @@ class PassiveModule(BaseModule):
     description = "Header/TLS/info-leak passive checks."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan):
+    async def run(self, scan, context):
         # Placeholder: emit a low-severity informational finding for demo.
         dedupe_key = f"info::passive::baseline::{scan.target_id}"
         evidence = EvidenceEvent(
@@ -24,10 +24,14 @@ class PassiveModule(BaseModule):
         yield FindingEvent(
             module=self.name,
             scan_id=scan.id,
+            title="Passive checks placeholder",
+            description="Placeholder finding emitted by the passive checks module.",
             dedupe_key=dedupe_key,
             type="informational.passive_placeholder",
             severity="info",
             confidence=Confidence.LOW.value,
             evidence_ids=None,
             source_module=self.name,
+            remediation="Replace placeholder checks with real passive validation and evidence.",
+            references=[],
         )

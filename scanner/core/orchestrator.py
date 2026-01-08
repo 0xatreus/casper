@@ -1,15 +1,18 @@
 import asyncio
+import hashlib
 from datetime import datetime
 from typing import Callable, Dict, Iterable, List, Optional, Type
 
 from sqlmodel import Session, select
 
+from scanner.config import Settings
 from .capabilities import Capability, CapabilityProfile, ensure_capabilities
 from .events import (
     CVECandidateEvent,
     EndpointDiscovered,
     Event,
     EvidenceEvent,
+    FetchEvent,
     FindingEvent,
     RecordPack,
     TechComponentEvent,
@@ -19,22 +22,34 @@ from .models import (
     CVECandidate,
     Endpoint,
     Evidence,
+    Fetch,
     Finding,
     Confidence,
     FindingStatus,
     Scan,
     Target,
     TechComponent,
+    StorageMode,
 )
 from .audit import record_audit_event
+from .storage import get_storage_backend
+from scanner.plugins.contract import Module, ModuleContext
 
 
 class Orchestrator:
     """Builds and executes scan plans against enabled modules."""
 
-    def __init__(self, session_factory, module_registry: Dict[str, "Module"]):
+    def __init__(self, session_factory, module_registry: Dict[str, Module], settings: Settings):
         self._session_factory = session_factory
         self._modules = module_registry
+        self._settings = settings
+        self._storage_backend = get_storage_backend(settings.object_store_base)
+        self._context = ModuleContext(
+            settings=settings,
+            session_factory=session_factory,
+            storage_backend=self._storage_backend,
+            storage_mode_default=settings.storage_mode_default,
+        )
 
     def create_scan(self, target_id: str, profile: CapabilityProfile, baseline_scan_id: Optional[str] = None) -> Scan:
         with self._session_factory() as session:
@@ -67,9 +82,16 @@ class Orchestrator:
             raise
         else:
             await self._set_scan_status(scan.id, "completed")
+            with self._session_factory() as session:
+                record_audit_event(
+                    session,
+                    actor="system",
+                    action=AuditAction.SCAN_COMPLETED,
+                    scan_id=scan.id,
+                )
 
-    async def _run_module(self, module: "Module", scan: Scan) -> None:
-        async for event in module.run(scan):
+    async def _run_module(self, module: Module, scan: Scan) -> None:
+        async for event in module.run(scan, self._context):
             self._persist_event(event)
 
     def _persist_event(self, event: Event) -> None:
@@ -87,6 +109,7 @@ class Orchestrator:
     def _handle_event(self, session: Session, event: Event) -> None:
         handler_map: Dict[Type[Event], Callable[[Session, Event], Optional[object]]] = {
             EndpointDiscovered: self._save_endpoint,
+            FetchEvent: self._save_fetch,
             EvidenceEvent: self._save_evidence,
             FindingEvent: self._save_finding,
             TechComponentEvent: self._save_tech_component,
@@ -131,6 +154,7 @@ class Orchestrator:
             snippet=event.snippet,
             location=event.location,
             hash=event.hash,
+            details=event.details,
         )
         session.add(evidence)
         session.commit()
@@ -144,17 +168,29 @@ class Orchestrator:
         confidence = Confidence(event.confidence)
         if finding:
             finding.last_seen = now
+            finding.title = event.title
+            finding.description = event.description
             finding.severity = event.severity
             finding.confidence = confidence
             finding.source_module = event.source_module
             finding.evidence_ids = event.evidence_ids or []
+            finding.remediation = event.remediation
+            finding.references = event.references
+            finding.cwe_id = event.cwe_id
+            finding.cve_id = event.cve_id
         else:
             finding = Finding(
                 dedupe_key=event.dedupe_key,
                 type=event.type,
+                title=event.title,
+                description=event.description,
                 severity=event.severity,
                 confidence=confidence,
                 status=FindingStatus.OPEN,
+                remediation=event.remediation,
+                references=event.references,
+                cwe_id=event.cwe_id,
+                cve_id=event.cve_id,
                 first_seen=now,
                 last_seen=now,
                 evidence_ids=event.evidence_ids or [],
@@ -216,6 +252,38 @@ class Orchestrator:
         session.refresh(candidate)
         return candidate
 
+    def _save_fetch(self, session: Session, event: FetchEvent) -> Fetch:
+        storage_mode = self._resolve_storage_mode(event.storage_mode)
+        body_hash = hashlib.sha256(event.body).hexdigest() if event.body else None
+        body_path = self._storage_backend.store_body(
+            scan_id=event.scan_id,
+            fetch_id=event.fetch_id,
+            body=event.body,
+            storage_mode=storage_mode,
+        )
+        fetch = session.get(Fetch, event.fetch_id)
+        if fetch:
+            fetch.endpoint_id = event.endpoint_id
+            fetch.request = event.request
+            fetch.response_meta = event.response_meta
+            fetch.storage_mode = storage_mode
+            fetch.body_path = body_path
+            fetch.body_hash = body_hash
+        else:
+            fetch = Fetch(
+                id=event.fetch_id,
+                endpoint_id=event.endpoint_id,
+                request=event.request,
+                response_meta=event.response_meta,
+                storage_mode=storage_mode,
+                body_path=body_path,
+                body_hash=body_hash,
+            )
+            session.add(fetch)
+        session.commit()
+        session.refresh(fetch)
+        return fetch
+
     def _save_record_pack(self, session: Session, event: RecordPack) -> None:
         # No dedicated storage yet; keep audit for traceability.
         return None
@@ -233,11 +301,12 @@ class Orchestrator:
                 session.add(scan)
                 session.commit()
 
-
-class Module:
-    """Protocol for modules. Implemented in scanner.modules.*"""
-
-    name: str
+    def _resolve_storage_mode(self, override: Optional[str]) -> StorageMode:
+        if override:
+            if isinstance(override, StorageMode):
+                return override
+            return StorageMode(override)
+        return self._context.storage_mode_default
     required_capabilities: List[Capability]
 
     async def run(self, scan: Scan):

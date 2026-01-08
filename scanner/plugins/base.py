@@ -1,7 +1,7 @@
 from typing import Dict, Iterable, List, Type
 
 from scanner.core.capabilities import Capability
-from scanner.core.orchestrator import Module
+from scanner.plugins.contract import Module
 
 
 class ModuleRegistry:
@@ -29,6 +29,7 @@ class BaseModule(Module):
 
     name: str = "base"
     description: str = ""
+    version: str = "0.1.0"
     required_capabilities: List[Capability] = []
 
     def __repr__(self) -> str:

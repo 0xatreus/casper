@@ -9,7 +9,7 @@ class CVECorrelatorModule(BaseModule):
     description = "Maps tech components to CVE candidates."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan):
+    async def run(self, scan, context):
         # Placeholder candidate to illustrate flow.
         yield CVECandidateEvent(
             module=self.name,
