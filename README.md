@@ -1,3 +1,5 @@
+# Casper
+
 ## Web Vulnerability Scanner (Python)
 
 Initial scaffold for the scanning service described in the brief. The goal is to provide a FastAPI front-end, worker-backed pipelines, capability-gated modules, and normalized lifecycle data (targets, scans, endpoints, findings, evidence, tech components, CVE candidates, exceptions, audit).
