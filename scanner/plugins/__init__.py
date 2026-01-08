@@ -1,0 +1,1 @@
+"""Plugin registration helpers."""
