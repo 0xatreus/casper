@@ -1,3 +1,4 @@
+from typing import AsyncGenerator
 from scanner.core.capabilities import Capability
 from scanner.core.events import EndpointDiscovered
 from scanner.core.models import Target
@@ -10,7 +11,7 @@ class DiscoveryModule(BaseModule):
     description = "Lightweight crawler/API discovery stub."
     required_capabilities = [Capability.NET_PASSIVE]
 
-    async def run(self, scan, context) -> EndpointDiscovered:
+    async def run(self, scan, context) -> AsyncGenerator[EndpointDiscovered, None]:
         with session_scope() as session:
             target = session.get(Target, scan.target_id)
         if not target:
